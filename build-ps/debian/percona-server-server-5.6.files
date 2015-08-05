@@ -54,3 +54,7 @@ usr/share/man/man8/mysqld.8
 usr/share/mysql
 etc/mysql/debian-start
 usr/share/mysql/debian-start.inc.sh
+usr/lib/*/libHotBackup.so
+usr/bin/tokuftdump
+usr/bin/ps_tokudb_admin
+usr/bin/tokuft_logprint

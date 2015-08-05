@@ -14,6 +14,15 @@ IF(NOT TOKUDB_OK)
   RETURN()
 ENDIF()
 
+# We link ha_tokudb.so statically with jemalloc
+INCLUDE(CheckLibraryExists)
+SET(jemalloc_libname jemalloc_pic)
+SET(CMAKE_REQUIRED_LIBRARIES pthread dl m)
+CHECK_LIBRARY_EXISTS(${jemalloc_libname} malloc_stats_print "" HAVE_STATIC_JEMALLOC)
+IF(NOT HAVE_STATIC_JEMALLOC)
+  MESSAGE(FATAL_ERROR "${jemalloc_libname} is not found")
+ENDIF()
+
 SET(BUILD_TESTING OFF CACHE BOOL "")
 SET(USE_VALGRIND OFF CACHE BOOL "")
 SET(TOKU_DEBUG_PARANOID OFF CACHE BOOL "")
@@ -100,6 +109,6 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR}/${TOKU_FT_DIR_NAME}/portability)
 SET(TOKUDB_PLUGIN_DYNAMIC "ha_tokudb")
 SET(TOKUDB_SOURCES ha_tokudb.cc)
 MYSQL_ADD_PLUGIN(tokudb ${TOKUDB_SOURCES} STORAGE_ENGINE MODULE_ONLY
-    LINK_LIBRARIES tokufractaltree_static tokuportability_static ${ZLIB_LIBRARY} stdc++)
+    LINK_LIBRARIES ${jemalloc_libname} tokufractaltree_static tokuportability_static ${ZLIB_LIBRARY} stdc++)
 SET_PROPERTY(TARGET tokudb APPEND PROPERTY LINK_FLAGS_RELEASE "-flto -fuse-linker-plugin")
 SET_PROPERTY(TARGET tokudb APPEND PROPERTY LINK_FLAGS_RELWITHDEBINFO "-flto -fuse-linker-plugin")
