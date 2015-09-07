@@ -17,8 +17,7 @@ MYSQLD=
 niceness=0
 mysqld_ld_preload=
 mysqld_ld_library_path=
-load_jemalloc=1
-load_hotbackup=1
+load_hotbackup=0
 flush_caches=0
 numa_interleave=0
 # Change (disable) transparent huge pages (TokuDB requirement)
@@ -229,7 +228,6 @@ parse_arguments() {
       --ledir=*) ledir="$val" ;;
       --malloc-lib=*)
 	set_malloc_lib "$val"
-	load_jemalloc=0
 	;;
       --mysqld=*) MYSQLD="$val" ;;
       --mysqld-version=*)
@@ -246,6 +244,7 @@ parse_arguments() {
       --open_files_limit=*) open_files="$val" ;;
       --skip-kill-mysqld*) KILL_MYSQLD=0 ;;
       --thp-setting=*) thp_setting="$val" ;;
+      --preload-hotbackup) load_hotbackup=1 ;;
       --syslog) want_syslog=1 ;;
       --skip-syslog) want_syslog=0 ;;
       --syslog-tag=*) syslog_tag="$val" ;;
@@ -519,19 +518,6 @@ fi
 
 parse_arguments `$print_defaults $defaults --loose-verbose mysqld_safe safe_mysqld`
 parse_arguments PICK-ARGS-FROM-ARGV "$@"
-
-#
-# Add jemalloc to ld_preload if no other malloc forced - needed for TokuDB
-#
-if test $load_jemalloc -eq 1
-then
-  for libjemall in "${MY_BASEDIR_VERSION}/lib/mysql" "/usr/lib64" "/usr/lib/x86_64-linux-gnu" "/usr/lib"; do
-    if [ -r "$libjemall/libjemalloc.so.1" ]; then
-      add_mysqld_ld_preload "$libjemall/libjemalloc.so.1"
-      break
-    fi  
-  done
-fi
 
 #
 # Add TokuDB HotBackup library to ld_preload

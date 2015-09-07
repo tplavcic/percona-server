@@ -29,6 +29,7 @@
 %define redhatversion %(lsb_release -rs | awk -F. '{ print $1}')
 %define percona_server_version @@PERCONA_VERSION@@
 %define revision @@REVISION@@
+%define tokudb_backup_version @@TOKUDB_BACKUP_VERSION@@
 
 #
 %bcond_with tokudb
@@ -46,7 +47,7 @@
 
 #
 %if %{with tokudb}
-  %define TOKUDB_FLAGS -DWITH_VALGRIND=OFF -DUSE_VALGRIND=OFF -DDEBUG_EXTNAME=OFF -DBUILD_TESTING=OFF -DUSE_GTAGS=OFF -DUSE_CTAGS=OFF -DUSE_ETAGS=OFF -DUSE_CSCOPE=OFF
+  %define TOKUDB_FLAGS -DWITH_VALGRIND=OFF -DUSE_VALGRIND=OFF -DDEBUG_EXTNAME=OFF -DBUILD_TESTING=OFF -DUSE_GTAGS=OFF -DUSE_CTAGS=OFF -DUSE_ETAGS=OFF -DUSE_CSCOPE=OFF -DTOKUDB_BACKUP_PLUGIN_VERSION=%{tokudb_backup_version}
   %define TOKUDB_DEBUG_ON -DTOKU_DEBUG_PARANOID=ON
   %define TOKUDB_DEBUG_OFF -DTOKU_DEBUG_PARANOID=OFF
 %else
@@ -260,9 +261,6 @@ Release:        %{release}
 Distribution:   %{distro_description}
 License:        Copyright (c) 2000, 2010, %{mysql_vendor}.  All rights reserved.  Use is subject to license terms.  Under %{license_type} license as shown in the Description field.
 Source:         http://www.percona.com/downloads/Percona-Server-5.6/Percona-Server-%{mysql_version}-%{percona_server_version}/source/%{src_dir}.tar.gz
-%if %{with tokudb}
-Source1:        http://www.percona.com/downloads/Percona-Server-5.6/Percona-Server-%{mysql_version}-%{percona_server_version}/source/%{src_dir}.tokudb.tar.gz
-%endif
 URL:            http://www.percona.com/
 Packager:       Percona MySQL Development Team <mysqldev@percona.com>
 Vendor:         %{percona_server_vendor}
@@ -270,6 +268,9 @@ Provides:       mysql-server
 BuildRequires:  %{distro_buildreq} pam-devel openssl-devel
 %if 0%{?systemd}
 BuildRequires:  systemd
+%endif
+%if %{with tokudb}
+BuildRequires:  jemalloc-devel
 %endif
 Patch0:         mysql-5.6-sharedlib-rename.patch
 Patch1:         mysql-5.6-libmysqlclient-symbols.patch
@@ -308,6 +309,10 @@ Requires(preun):  /sbin/service
 %endif
 Provides:       mysql-server MySQL-server
 Conflicts:	Percona-SQL-server-50 Percona-Server-server-51 Percona-Server-server-55
+%if %{with tokudb}
+Obsoletes:      Percona-Server-tokudb%{product_suffix}
+Provides:       tokudb-plugin = %{version}-%{release}
+%endif
 
 %description -n Percona-Server-server%{product_suffix}
 The Percona Server software delivers a very fast, multi-threaded, multi-user,
@@ -323,21 +328,6 @@ as well as related utilities to run and administer Percona Server.
 
 If you want to access and work with the database, you have to install
 package "Percona-Server-client%{product_suffix}" as well!
-
-%if %{with tokudb}
-# ----------------------------------------------------------------------------
-%package -n Percona-Server-tokudb%{product_suffix}
-Summary:        Percona Server - TokuDB
-Group:          Applications/Databases
-Requires:       Percona-Server-server%{product_suffix} = %{version}-%{release}
-Requires:       Percona-Server-shared%{product_suffix} = %{version}-%{release}
-Requires:       Percona-Server-client%{product_suffix} = %{version}-%{release}
-Requires:       jemalloc >= 3.3.0
-Provides:       tokudb-plugin = %{version}-%{release}
-
-%description -n Percona-Server-tokudb%{product_suffix}
-This package contains the TokuDB plugin for Percona Server %{version}-%{release}
-%endif
 
 # ----------------------------------------------------------------------------
 %package -n Percona-Server-selinux%{product_suffix}
@@ -428,9 +418,6 @@ and applications need to dynamically load and use Percona Server.
 ##############################################################################
 %prep
 %setup -n %{src_dir}
-%if %{with tokudb}
-%setup -n %{src_dir} -T -D -b 1
-%endif
 
 %if "%rhel" > "6"
 %patch0 -p1
@@ -964,10 +951,7 @@ fi
 # For systemd check postun
 %if 0%{?systemd} == 0
 # Was the server running before the upgrade? If so, restart the new one.
-# Don't start it if TokuDB package is installed - it will be started
-# after TokuDB package is upgraded - prevents TokuDB init error
-tokudb_installed=`rpm -q Percona-Server-tokudb-56 2>/dev/null`
-if [ $? -eq 1 -a "$SERVER_TO_START" = "true" ] ; then
+if [ "$SERVER_TO_START" = "true" ] ; then
 	# Restart in the same way that mysqld will be started normally.
 	if [ -x %{_sysconfdir}/init.d/mysql ] ; then
 		%{_sysconfdir}/init.d/mysql start
@@ -983,6 +967,16 @@ echo "mysql -e \"CREATE FUNCTION fnv1a_64 RETURNS INTEGER SONAME 'libfnv1a_udf.s
 echo "mysql -e \"CREATE FUNCTION fnv_64 RETURNS INTEGER SONAME 'libfnv_udf.so'\""
 echo "mysql -e \"CREATE FUNCTION murmur_hash RETURNS INTEGER SONAME 'libmurmur_udf.so'\""
 echo "See http://www.percona.com/doc/percona-server/5.6/management/udf_percona_toolkit.html for more details"
+
+%if %{with tokudb}
+if [ $1 -eq 1 ] ; then
+  echo -e "\n\n * This release of Percona Server is distributed with TokuDB storage engine."
+  echo -e " * Run the following script to enable the TokuDB storage engine in Percona Server:\n"
+  echo -e "\tps_tokudb_admin --enable -u <mysql_admin_user> -p[mysql_admin_pass] [-S <socket>] [-h <host> -P <port>]\n"
+  echo -e " * See http://www.percona.com/doc/percona-server/5.6/tokudb/tokudb_installation.html for more installation details\n"
+  echo -e " * See http://www.percona.com/doc/percona-server/5.6/tokudb/tokudb_intro.html for an introduction to TokuDB\n\n"
+fi
+%endif
 
 # Collect an upgrade history ...
 echo "Upgrade/install finished at `date`"        >> $STATUS_FILE
@@ -1104,54 +1098,6 @@ echo "Trigger 'postun --community' finished at `date`"        >> $STATUS_HISTORY
 echo                                             >> $STATUS_HISTORY
 echo "====="                                     >> $STATUS_HISTORY
 
-
-%if %{with tokudb}
-# ----------------------------------------------------------------------------
-%post -n Percona-Server-tokudb%{product_suffix}
-
-if [ $1 -eq 1 ] ; then
-  echo -e "\n\n * This release of Percona Server is distributed with TokuDB storage engine."
-  echo -e " * Run the following script to enable the TokuDB storage engine in Percona Server:\n"
-  echo -e "\tps_tokudb_admin --enable -u <mysql_admin_user> -p[mysql_admin_pass] [-S <socket>] [-h <host> -P <port>]\n"
-  echo -e " * See http://www.percona.com/doc/percona-server/5.6/tokudb/tokudb_installation.html for more installation details\n"
-  echo -e " * See http://www.percona.com/doc/percona-server/5.6/tokudb/tokudb_intro.html for an introduction to TokuDB\n\n"
-fi
-# If upgrade is in question and the server was started before upgrade we need to start it
-# after upgrading TokuDB package and not before because TokuDB will fail on init
-%if 0%{?systemd} == 0
-if [ $1 -eq 2 ]; then
-	# There are users who deviate from the default file system layout.
-	# Check local settings to support them.
-	if [ -x %{_bindir}/my_print_defaults ]
-	then
-	  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p' | tail -n 1`
-	fi
-	if [ -z "$mysql_datadir" ]
-	then
-	  mysql_datadir=%{mysqldatadir}
-	fi
-
-	STATUS_FILE=$mysql_datadir/RPM_UPGRADE_MARKER-LAST
-
-	if [ -f $STATUS_FILE ] ; then
-	  SERVER_TO_START=`grep '^SERVER_TO_START=' $STATUS_FILE | cut -c17-`
-	else
-	  SERVER_TO_START=''
-	fi
-
-	# Was the server running before the upgrade? If so, restart the new one.
-	if [ "$SERVER_TO_START" = "true" ] ; then 
-	  # Restart in the same way that mysqld will be started normally.
-	  if [ -x %{_sysconfdir}/init.d/mysql ] ; then 
-	    %{_sysconfdir}/init.d/mysql start
-	    echo "Giving mysqld 5 seconds to start"
-	    sleep 5
-	  fi
-	fi
-fi
-%endif
-# ----------------------------------------------------------------------------
-%endif
 
 %postun -n Percona-Server-server%{product_suffix}
 %if 0%{?systemd}
@@ -1307,6 +1253,17 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/scalability_metrics.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/scalability_metrics.so
 
+%if %{with tokudb}
+%attr(755, root, root) %{_libdir}/mysql/plugin/ha_tokudb.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/ha_tokudb.so
+%attr(755, root, root) %{_bindir}/ps_tokudb_admin
+%attr(755, root, root) %{_bindir}/tokuft_logprint
+%attr(755, root, root) %{_bindir}/tokuftdump
+%attr(755, root, root) %{_libdir}/mysql/plugin/tokudb_backup.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/tokudb_backup.so
+%attr(755, root, root) %{_libdir}/libHotBackup.so
+%endif
+
 %if %{WITH_TCMALLOC}
 %attr(755, root, root) %{_libdir}/mysql/%{malloc_lib_target}
 %endif
@@ -1409,7 +1366,12 @@ fi
 %{_libdir}/mysql/%{shared_lib_pri_name}.a
 %{_libdir}/mysql/%{shared_lib_pri_name}_r.a
 %{_libdir}/mysql/libmysqlservices.a
-%{_libdir}/*.so
+%{_libdir}/%{shared_lib_pri_name}.so
+%{_libdir}/%{shared_lib_pri_name}_r.so
+
+%if %{with tokudb}
+%{_includedir}/backup.h
+%endif
 
 %post -n Percona-Server-devel%{product_suffix}
 # For compatibility after reverting name to libmysql
@@ -1426,17 +1388,6 @@ if [ -h %{_libdir}/mysql/$lib ]; then
 	rm -f %{_libdir}/mysql/$lib;
 fi
 done
-
-# ----------------------------------------------------------------------------
-%if %{with tokudb}
-%files -n Percona-Server-tokudb%{product_suffix}
-%attr(-, root, root) 
-%{_bindir}/tokuftdump
-%{_libdir}/mysql/plugin/ha_tokudb.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/ha_tokudb.so
-%attr(755, root, root) %{_bindir}/ps_tokudb_admin
-%attr(755, root, root) %{_bindir}/tokuft_logprint
-%endif
 
 # ----------------------------------------------------------------------------
 %files -n Percona-Server-shared%{product_suffix}

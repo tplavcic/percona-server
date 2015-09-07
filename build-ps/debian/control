@@ -25,7 +25,8 @@ Build-Depends: libtool (>= 1.4.2-7),
                g++ (>= 4.4),
                libaio-dev[linux-any],
                libpam-dev,
-               libssl-dev
+               libssl-dev,
+               libjemalloc-dev (>= 3.3.0)
 Standards-Version: 3.9.4
 Homepage: http://www.percona.com/software/percona-server/
 Vcs-Bzr: lp:percona-server/5.6
@@ -180,7 +181,8 @@ Replaces: mysql-server-5.0,
           mariadb-server-core-5.5,
           mariadb-server-5.5,
           virtual-mysql-server,
-          virtual-mysql-server-core
+          virtual-mysql-server-core,
+          percona-server-tokudb-5.6
 Description: Percona Server database server binaries
  Percona Server is a fast, stable and true multi-user, multi-threaded SQL
  database server. SQL (Structured Query Language) is the most popular database
